@@ -8,6 +8,12 @@
 #include <cmath>
 using namespace std;
 
+
+//Objeto que almacena data de cliente
+//Pendiente:
+//Destructor
+//Implementar lista de adyacencia (quiza no sea necesario siendo que el grafo es todos a todos)
+//Método para obtener cliente más cercano, o quizas lista de clientes en orden de cercanía
 class Client{
     public:
         int x;
@@ -34,6 +40,33 @@ float dist(Client a, Client b){
     //sqrt retorna double asi que casteamos a float
     return (float) sqrt(pow(a.x - b.x,2) + pow(a.y - b.y,2)); 
 }
+
+//Objeto que almacena data de instancia
+//Pendiente:
+//Metodo solve() para resolver la instancia con algun algoritmo en particular
+//Metodo para printear la instancia bien bonito
+//Destructor
+class Instance{
+    int N_trucks;
+    float truck_capacity;
+    int N_trailers;
+    float trailer_capacity;
+    int N_clients;
+    vector<Client> clients;
+
+    Instance(int N_trucks, float truck_capacity, int N_trailers, 
+             float trailer_capacity, int N_clients, vector<Client> clients)
+        {
+        this->N_trucks = N_trucks;
+        this->truck_capacity = truck_capacity;
+        this->N_trailers = N_trailers;
+        this->trailer_capacity = trailer_capacity;
+        this->N_clients = N_clients;
+        this->clients = clients;
+        }
+    
+
+};
 
 
 int main(){
