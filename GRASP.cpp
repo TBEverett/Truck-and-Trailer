@@ -127,12 +127,16 @@ class Solution{
         feasible = 1;
         this->routes = routes;
     }
-    float getCost(){
+    // Evaluacion de una solucion
+    float eval(){
         float cost = 0;
-        for(int i = 0; i < routes.size(); i++){
-            for (int j = 0; j < routes[i].size() - 1; j++){
+        int i;
+        int j;
+        for(i = 0; i < routes.size(); i++){
+            for (j = 0; j < routes[i].size() - 1; j++){
                 cost += dist(routes[i][j],routes[i][j+1]);
             }
+            cost += dist(routes[i][j+1],routes[i][0]); // Agrega el costo de volver del ultimo nodo de cada camion al depot
         }
         return cost;
     }
@@ -147,7 +151,7 @@ class Solution{
             cout << endl;
         }
         cout << endl;
-        cout << "Evaluacion: " << this->getCost() << endl;
+        cout << "Evaluacion: " << this->eval() << endl;
         if (feasible == 0){
             cout << "Unfeasible Solution" << endl;
         }
