@@ -136,7 +136,7 @@ class Solution{
             for (j = 0; j < routes[i].size() - 1; j++){
                 cost += dist(routes[i][j],routes[i][j+1]);
             }
-            cost += dist(routes[i][j+1],routes[i][0]); // Agrega el costo de volver del ultimo nodo de cada camion al depot
+            cost += dist(routes[i][j],routes[i][0]); // Agrega el costo de volver del ultimo nodo de cada camion al depot
         }
         return cost;
     }
@@ -145,7 +145,7 @@ class Solution{
         cout << "Solution: " << endl;
         for(int i = 0; i < routes.size(); i++){
             cout << "Truck " << i << ": " << endl; 
-            for (int j = 0; j < routes[i].size() - 1; j++){
+            for (int j = 0; j < routes[i].size(); j++){
                 cout << "(" << routes[i][j].x << "," << routes[i][j].y << ")" << " ";
             }
             cout << endl;
@@ -199,18 +199,12 @@ class Instance{
         //Metodo para resolver la instancia al azar
         Solution solve(){
 
-            
-
-            srand(time(NULL));
-
             // Primero haremos un greedy, luego lo randomizaremos
             // Iteramos camión por camión (esto despues será random, o sera todo primero uno y luego otro idk)
             vector<vector<Client>> routes(N_trucks);
             vector<Client> aux_clients = clients;
             Client depot = aux_clients[0];
             aux_clients.erase(aux_clients.begin()); //Sacamos depot de lista de clientes
-
-            
             for(int i = 0; i < N_trucks; i++){
                 routes[i].push_back(depot); //Agregamos depot al comienzo de cada ruta
                 Client aux_client = depot;
@@ -244,7 +238,6 @@ class Instance{
                     else { //Si es cliente de trailer, se descuenta solo de trailer
                         trailer_capacities[i] -= aux_client.demand;
                     }
-
                 }   
             }
             //Revisamos si se encontró una solución factible
@@ -305,10 +298,8 @@ Instance read_instance(string instance_name){
 
 
 int main(){
-    
     string instance_name = "small1-5A.txt";
     Instance instance = read_instance(instance_name);
-    print_clients(instance.clients);
     Solution solution = instance.solve();
     solution.print();
 
