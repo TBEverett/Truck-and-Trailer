@@ -8,7 +8,12 @@
 #include <cmath>
 #include <random>
 #include <algorithm>
+#include <queue>
+#include <ctime>
+#include <filesystem>
 using namespace std;
+namespace fs = std::filesystem;
+
 
 //Objeto que almacena data de cliente
 //Pendiente:
@@ -47,39 +52,45 @@ float dist(Client a, Client b){
 //Como instancias son pequeñas, podemos usar búsqueda lineal simplemente
 //Para instancias grandes probablemente sea mejor un min heap
 //Obtenemos el cliente factible más cercano
+//GRASP: Hacemos un ranking de clientes por cercanía y escogemos al azar ponderado
 Client nearestNeighbour(vector<Client> clients, Client client, float truck_capacity, float trailer_capacity){
-    int min = dist(client,clients[0]);
-    Client nearest = clients[0];
-    float new_dist;
-    for(int i = 1; i < clients.size(); i++){
-        new_dist = dist(client,clients[i]);
-        if (new_dist < min){
-            if (client.truck_customer == 0){ //Si es nodo normal
-                if (client.demand <= truck_capacity + trailer_capacity){
-                    min = new_dist;
-                    nearest = clients[i];
+
+    //Obtenemos las distancias del punto a todo el resto
+    vector<float> distances;
+    for(int i = 0; i < clients.size(); i++){
+        distances.push_back(dist(client,clients[i]));
+    }
+    
+    //Vamos encontrando y extrayendo el min_element del vector (O(n^2) horrible, en implementación final usar un algoritmo de ordenamiento con indices del otro arreglo)
+    vector<Client> sorted_clients;
+    vector<Client> aux_clients = clients;
+    while(!distances.empty()){
+        int min_index = distance(distances.begin(), min_element(distances.begin(), distances.end()));
+        sorted_clients.push_back(aux_clients[min_index]);
+        distances.erase(distances.begin() + min_index);
+    }
+    //Damos pesos a los indices del vector ordenado (posiblemente sea mejor a futuro randomizar estos pesos con sesgo a los mejores)
+    //Pesos: 0.5, 0.25, 0.125, etc..
+    //Vamos tomando decision binaria para cada elemento, si no toma el primero, prueba con el segundo, etc...
+    double threshold = 0.01; //50% probabilidad de escoger el valor actual
+    
+    int i = 0;
+    while(i < sorted_clients.size()){
+        double random_number = (double) rand() / RAND_MAX;
+        if (random_number >= threshold){
+            //Revisamos factibilidad. Si no es factible, seguimos probando 
+            if (sorted_clients[i].truck_customer == 0){ //Si es nodo normal
+                if (sorted_clients[i].demand <= truck_capacity + trailer_capacity){
+                    return sorted_clients[i];
                 }
             }
             else{ //Si es nodo de camión
-                if (client.demand <= truck_capacity){
-                        min = new_dist;
-                        nearest = clients[i];
-                    }
+                if (sorted_clients[i].demand <= truck_capacity){
+                    return sorted_clients[i];
+                }
             }
-            min = new_dist;
-            nearest = clients[i];
         }
-    }
-    //Revisamos factibilidad final por si no encontró en todo el for y se quedó con el basal
-    if (nearest.truck_customer == 0){ //Si es nodo normal
-        if (nearest.demand <= truck_capacity + trailer_capacity){
-            return nearest;
-        }
-    }
-    else{ //Si es nodo de camión
-        if (nearest.demand <= truck_capacity){
-            return nearest;
-        }
+        i++;
     }
     //Si no se encontró factible, retornamos un cliente especial None
     Client null_client;
@@ -129,6 +140,9 @@ class Solution{
     }
     // Evaluacion de una solucion
     float eval(){
+        if (feasible == 0){
+            return 999999;
+        }
         float cost = 0;
         int i;
         int j;
@@ -198,11 +212,11 @@ class Instance{
             }
         //Metodo para resolver la instancia al azar
         Solution solve(){
-
-            // Primero haremos un greedy, luego lo randomizaremos
-            // Iteramos camión por camión (esto despues será random, o sera todo primero uno y luego otro idk)
+            // Iteramos camión por camión (random despues maybe?)
             vector<vector<Client>> routes(N_trucks);
             vector<Client> aux_clients = clients;
+            vector<float> aux_truck_capacities = truck_capacities;
+            vector<float> aux_trailer_capacities = trailer_capacities;
             Client depot = aux_clients[0];
             aux_clients.erase(aux_clients.begin()); //Sacamos depot de lista de clientes
             for(int i = 0; i < N_trucks; i++){
@@ -210,7 +224,7 @@ class Instance{
                 Client aux_client = depot;
                 while(!aux_clients.empty()){ //Iteramos hasta que se acaben los clientes
                     //We find closest neighbour
-                    aux_client = nearestNeighbour(aux_clients,aux_client,truck_capacities[i],trailer_capacities[i]);
+                    aux_client = nearestNeighbour(aux_clients,aux_client,aux_truck_capacities[i],aux_trailer_capacities[i]);
                     if (aux_client.demand == -1){ //No se encontró ningun cliente factible, pasamos al siguiente camión
                         break;
                     }
@@ -223,24 +237,24 @@ class Instance{
                     }
                     //Add node to truck route, descontando la demanda correspondiente
                     routes[i].push_back(aux_client);
-                    float total_capacity = truck_capacities[i] + trailer_capacities[i];
+                    float total_capacity = aux_truck_capacities[i] + aux_trailer_capacities[i];
                     if (aux_client.truck_customer == 0){ //Si es cliente normal, se atiende desde el truck + trailer y descuenta demanda correspondiente
                         total_capacity -= aux_client.demand; //Este caso contempla relleno de truck despues de cada parada
                         if (total_capacity - max_truck_capacity < 0){
-                            truck_capacities[i] = total_capacity;
-                            trailer_capacities[i] = 0;
+                            aux_truck_capacities[i] = total_capacity;
+                            aux_trailer_capacities[i] = 0;
                         }
                         else { 
-                            truck_capacities[i] = max_truck_capacity;
-                            trailer_capacities[i] = total_capacity - max_truck_capacity;
+                            aux_truck_capacities[i] = max_truck_capacity;
+                            aux_trailer_capacities[i] = total_capacity - max_truck_capacity;
                         }
                     }
                     else { //Si es cliente de trailer, se descuenta solo de trailer
-                        trailer_capacities[i] -= aux_client.demand;
+                        aux_trailer_capacities[i] -= aux_client.demand;
                     }
                 }   
             }
-            //Revisamos si se encontró una solución factible
+            //Revisamos si se encontró una solución factible, si no, retornamos una solucion infactible
             if (aux_clients.size() != 0){
                 Solution solution;
                 return solution;
@@ -260,7 +274,7 @@ Instance read_instance(string instance_name){
     int N_clients;
     vector<Client> clients;
 
-    ifstream file("instances/"+instance_name);
+    ifstream file(instance_name);
 
     file >> N_trucks;
     file >> truck_capacity;
@@ -298,9 +312,35 @@ Instance read_instance(string instance_name){
 
 
 int main(){
-    string instance_name = "small1-5A.txt";
-    Instance instance = read_instance(instance_name);
-    Solution solution = instance.solve();
-    solution.print();
+    srand(time(NULL));
+
+    string path = "instances";
+    ofstream output_file("resultados.csv");
+    float total_eval = 0;
+    int instance_amount = 0;
+    for (const auto & entry : fs::directory_iterator(path)){
+        output_file << entry.path() << ": ";
+        string instance_name = entry.path();
+        Instance instance = read_instance(instance_name);
+        
+        int restarts = 10000;
+        Solution best_solution;
+        float best_eval = 999999; 
+        for(int i = 0; i < restarts; i++){
+            Solution solution = instance.solve();
+            if (solution.eval() < best_eval){
+                best_solution = solution;
+                best_eval = solution.eval();
+            }
+        }
+        output_file << best_solution.eval() << endl;
+        total_eval += best_solution.eval();
+        instance_amount++;
+    }
+    total_eval /= instance_amount;
+    output_file << "Evaluacion promedio: " << total_eval << endl;
+
+
+    
 }
 
