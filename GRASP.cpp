@@ -11,8 +11,12 @@
 #include <queue>
 #include <ctime>
 #include <filesystem>
+#include <chrono>
 using namespace std;
 namespace fs = std::filesystem;
+
+auto seed = std::chrono::system_clock::now().time_since_epoch().count();
+std::mt19937 generator(seed);
 
 
 //Objeto que almacena data de cliente
@@ -69,33 +73,33 @@ Client nearestNeighbour(vector<Client> clients, Client client, float truck_capac
         sorted_clients.push_back(aux_clients[min_index]);
         distances.erase(distances.begin() + min_index);
     }
-    //Damos pesos a los indices del vector ordenado (posiblemente sea mejor a futuro randomizar estos pesos con sesgo a los mejores)
-    //Pesos: 0.5, 0.25, 0.125, etc..
-    //Vamos tomando decision binaria para cada elemento, si no toma el primero, prueba con el segundo, etc...
-    double threshold = 0.01; //50% probabilidad de escoger el valor actual
-    
-    int i = 0;
-    while(i < sorted_clients.size()){
-        double random_number = (double) rand() / RAND_MAX;
-        if (random_number >= threshold){
-            //Revisamos factibilidad. Si no es factible, seguimos probando 
-            if (sorted_clients[i].truck_customer == 0){ //Si es nodo normal
-                if (sorted_clients[i].demand <= truck_capacity + trailer_capacity){
-                    return sorted_clients[i];
-                }
-            }
-            else{ //Si es nodo de camión
-                if (sorted_clients[i].demand <= truck_capacity){
-                    return sorted_clients[i];
-                }
+
+    //Filtramos vecinos incluyendo solo factibles
+    vector<Client> filtered_neighbours;
+    for(int i = 0; i < sorted_clients.size(); i++){
+        if (sorted_clients[i].truck_customer == 0){ //Si es nodo normal
+            if (sorted_clients[i].demand <= truck_capacity + trailer_capacity){
+                filtered_neighbours.push_back(sorted_clients[i]);
             }
         }
-        i++;
+        else{ //Si es nodo de camión
+            if (sorted_clients[i].demand <= truck_capacity){
+                filtered_neighbours.push_back(sorted_clients[i]);
+            }
+        }
     }
-    //Si no se encontró factible, retornamos un cliente especial None
-    Client null_client;
-    null_client.demand = -1;
-    return null_client;
+    if (filtered_neighbours.empty()){
+        //Si no se encontró factible, retornamos un cliente especial nulo con demanda -1
+        Client null_client;
+        null_client.demand = -1;
+        return null_client;
+    }
+
+    //Escogemos un proximo nodo al azar entre el top 3 (o 5 quizas?)
+    int top_n = 5;
+    std::uniform_int_distribution<int> distribution(0, min(top_n,(int) filtered_neighbours.size()) - 1);
+    float random_number = distribution(generator);
+    return filtered_neighbours[random_number];
 }
 
 //Clase que representa la ruta de un vehículo en particular
@@ -173,6 +177,16 @@ class Solution{
             cout << "Feasible Solution" << endl;
         }
     }
+    void to_file(){
+        ofstream out("solution.txt");
+        for(int i = 0; i < routes.size(); i++){
+            for (int j = 0; j < routes[i].size(); j++){
+                out << routes[i][j].x << "," << routes[i][j].y  << " ";
+            }
+            out << endl;
+        }
+        out << "Evaluacion: " << this->eval() << endl;
+    }
 };
 
 //Objeto que almacena data de instancia
@@ -212,20 +226,29 @@ class Instance{
             }
         //Metodo para resolver la instancia al azar
         Solution solve(){
+            
             // Iteramos camión por camión (random despues maybe?)
             vector<vector<Client>> routes(N_trucks);
             vector<Client> aux_clients = clients;
             vector<float> aux_truck_capacities = truck_capacities;
             vector<float> aux_trailer_capacities = trailer_capacities;
             Client depot = aux_clients[0];
+            Client subtour_start_client;
             aux_clients.erase(aux_clients.begin()); //Sacamos depot de lista de clientes
             for(int i = 0; i < N_trucks; i++){
                 routes[i].push_back(depot); //Agregamos depot al comienzo de cada ruta
                 Client aux_client = depot;
+                Client prev_client;
                 while(!aux_clients.empty()){ //Iteramos hasta que se acaben los clientes
                     //We find closest neighbour
+                    prev_client = aux_client;
                     aux_client = nearestNeighbour(aux_clients,aux_client,aux_truck_capacities[i],aux_trailer_capacities[i]);
                     if (aux_client.demand == -1){ //No se encontró ningun cliente factible, pasamos al siguiente camión
+                        //Aqui revisamos si es necesario volver a buscar el trailer a alguna parte
+                        
+                        if (prev_client.truck_customer == 1){
+                            routes[i].push_back(subtour_start_client);
+                        }
                         break;
                     }
                     //Eliminamos cliente encontrado de la lista
@@ -235,7 +258,15 @@ class Instance{
                     else {
                         cout << "Se intento de eliminar un cliente que no está en aux_clients" << endl;
                     }
-                    //Add node to truck route, descontando la demanda correspondiente
+                    //Si pasamos a nodo de camion anotamos el comienzo del subtour para poder volver
+                    if (prev_client.truck_customer == 0 && aux_client.truck_customer == 1){
+                        subtour_start_client = prev_client;
+                    }
+                    //Si el nodo anterior era de camion y el nuevo es completo, hay que agregar el primer nodo del subtour denuevo para mostrar que el camion recoje el trailer
+                    if (prev_client.truck_customer == 1 && aux_client.truck_customer == 0){
+                        routes[i].push_back(subtour_start_client);
+                    }
+                    //Add node to truck route, descontando la demanda correspondiente (TaT sin transferencia)
                     routes[i].push_back(aux_client);
                     float total_capacity = aux_truck_capacities[i] + aux_trailer_capacities[i];
                     if (aux_client.truck_customer == 0){ //Si es cliente normal, se atiende desde el truck + trailer y descuenta demanda correspondiente
@@ -251,6 +282,12 @@ class Instance{
                     }
                     else { //Si es cliente de trailer, se descuenta solo de trailer
                         aux_trailer_capacities[i] -= aux_client.demand;
+                    }
+                    //Condicion boba para caso borde donde el ultimo cliente de todo el recorrido de un camion es nodo camion y no termina volviendo a buscar el trailer
+                    if (aux_clients.empty()){
+                        if (aux_client.truck_customer == 1){
+                                routes[i].push_back(subtour_start_client);
+                        }
                     }
                 }   
             }
@@ -282,7 +319,7 @@ Instance read_instance(string instance_name){
     file >> trailer_capacity;
     file >> N_clients;
     
-    //Nota: Por alguna razon, N_trailers puede ser mayor que N_trucks, en cuyo caso se igualan. (preguntar)
+    //Nota: Por alguna razon, N_trailers puede ser mayor que N_trucks, en cuyo caso se igualan.
     N_trailers = min(N_trailers,N_trucks);
 
     // Lectura de datos de depot y clientes
@@ -310,22 +347,24 @@ Instance read_instance(string instance_name){
     return instance;
 }
 
-
+/*
 int main(){
     srand(time(NULL));
 
-    string path = "instances";
+    string path = "andres";
     ofstream output_file("resultados.csv");
     float total_eval = 0;
     int instance_amount = 0;
+    //Ejecutamos 'restarts' veces por cada instancia en el directorio, almacenando la mejor solucion para cada una.
     for (const auto & entry : fs::directory_iterator(path)){
         output_file << entry.path() << ": ";
+        cout << "Working on instance: " << instance_amount << " - " << entry.path() << endl;
         string instance_name = entry.path();
         Instance instance = read_instance(instance_name);
         
         int restarts = 10000;
         Solution best_solution;
-        float best_eval = 999999; 
+        float best_eval = 999999;
         for(int i = 0; i < restarts; i++){
             Solution solution = instance.solve();
             if (solution.eval() < best_eval){
@@ -338,9 +377,17 @@ int main(){
         instance_amount++;
     }
     total_eval /= instance_amount;
-    output_file << "Evaluacion promedio: " << total_eval << endl;
+    output_file << "Evaluacion promedio: " << total_eval << endl;   
+}
+*/
 
 
-    
+int main(int argc, char* argv[]){
+
+    string instance_name = argv[1];
+    Instance instance = read_instance(instance_name);
+    Solution solution = instance.solve();
+    solution.print();
+    solution.to_file();
 }
 
