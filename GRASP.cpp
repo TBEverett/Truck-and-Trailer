@@ -181,6 +181,9 @@ class Solution{
         ofstream out("solution.txt");
         for(int i = 0; i < routes.size(); i++){
             for (int j = 0; j < routes[i].size(); j++){
+                if (routes[i][j].truck_customer == 1){
+                    out << "T";
+                }
                 out << routes[i][j].x << "," << routes[i][j].y  << " ";
             }
             out << endl;
@@ -209,16 +212,19 @@ class Instance{
             {
             this->N_trucks = N_trucks;
             this->max_truck_capacity = truck_capacity;
+
             vector<float> truck_capacities;
+            vector<float> trailer_capacities;
             for(int i = 0; i < N_trucks; i++){
                 truck_capacities.push_back(max_truck_capacity);
+                trailer_capacities.push_back(0);
             }
             this->truck_capacities = truck_capacities;
             this->N_trailers = N_trailers;
             this->max_trailer_capacity = trailer_capacity;
-            vector<float> trailer_capacities;
+            
             for(int i = 0; i < N_trailers; i++){
-                trailer_capacities.push_back(max_trailer_capacity);
+                trailer_capacities[i] = max_trailer_capacity;
             }
             this->trailer_capacities = trailer_capacities;
             this->N_clients = N_clients;
@@ -226,7 +232,6 @@ class Instance{
             }
         //Metodo para resolver la instancia al azar
         Solution solve(){
-            
             // Iteramos camión por camión (random despues maybe?)
             vector<vector<Client>> routes(N_trucks);
             vector<Client> aux_clients = clients;
@@ -347,22 +352,14 @@ Instance read_instance(string instance_name){
     return instance;
 }
 
-/*
-int main(){
-    srand(time(NULL));
-
-    string path = "andres";
-    ofstream output_file("resultados.csv");
-    float total_eval = 0;
-    int instance_amount = 0;
-    //Ejecutamos 'restarts' veces por cada instancia en el directorio, almacenando la mejor solucion para cada una.
-    for (const auto & entry : fs::directory_iterator(path)){
-        output_file << entry.path() << ": ";
-        cout << "Working on instance: " << instance_amount << " - " << entry.path() << endl;
-        string instance_name = entry.path();
+// Ejemplo: 
+// g++ GRASP.cpp -o GRASP && ./GRASP instances/small2-10C.txt
+// g++ GRASP.cpp -o GRASP && ./GRASP all
+int main(int argc, char* argv[]){
+    string instance_name = argv[1];
+    if (instance_name != "all"){
         Instance instance = read_instance(instance_name);
-        
-        int restarts = 10000;
+        int restarts = stoi(argv[2]);
         Solution best_solution;
         float best_eval = 999999;
         for(int i = 0; i < restarts; i++){
@@ -372,22 +369,36 @@ int main(){
                 best_eval = solution.eval();
             }
         }
-        output_file << best_solution.eval() << endl;
-        total_eval += best_solution.eval();
-        instance_amount++;
+        best_solution.print();
+        best_solution.to_file();
     }
-    total_eval /= instance_amount;
-    output_file << "Evaluacion promedio: " << total_eval << endl;   
+    else{
+        string path = "andres";
+        ofstream output_file("resultados.csv");
+        float total_eval = 0;
+        int instance_amount = 0;
+        //Ejecutamos 'restarts' veces por cada instancia en el directorio, almacenando la mejor solucion para cada una.
+        for (const auto & entry : fs::directory_iterator(path)){
+            output_file << entry.path() << ": ";
+            cout << "Working on instance: " << instance_amount << " - " << entry.path() << endl;
+            string instance_name = entry.path();
+            Instance instance = read_instance(instance_name);
+            
+            int restarts = stoi(argv[2]);
+            Solution best_solution;
+            float best_eval = 999999;
+            for(int i = 0; i < restarts; i++){
+                Solution solution = instance.solve();
+                if (solution.eval() < best_eval){
+                    best_solution = solution;
+                    best_eval = solution.eval();
+                }
+            }
+            output_file << best_solution.eval() << endl;
+            total_eval += best_solution.eval();
+            instance_amount++;
+        }
+        total_eval /= instance_amount;
+        output_file << "Evaluacion promedio: " << total_eval << endl;   
+    }
 }
-*/
-
-
-int main(int argc, char* argv[]){
-
-    string instance_name = argv[1];
-    Instance instance = read_instance(instance_name);
-    Solution solution = instance.solve();
-    solution.print();
-    solution.to_file();
-}
-
