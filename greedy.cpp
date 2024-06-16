@@ -298,7 +298,7 @@ Instance read_instance(string instance_name){
 
 
 int main(){
-    string instance_name = "small1-5A.txt";
+    string instance_name = "small2-10C.txt";
     Instance instance = read_instance(instance_name);
     Solution solution = instance.solve();
     solution.print();
