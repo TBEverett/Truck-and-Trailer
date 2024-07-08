@@ -77,7 +77,6 @@ vector<Solution> getFullSwapNeighbours(Solution solution){
     return neighbours;
 }
 
-
 //Funcion getNeighbours actua de router a distintos métodos de movimiento
 vector<Solution> getNeighbours(Solution solution, string movement_type){  
     if (movement_type == "adjacentSwap") return getAdjacentSwapNeighbours(solution);
